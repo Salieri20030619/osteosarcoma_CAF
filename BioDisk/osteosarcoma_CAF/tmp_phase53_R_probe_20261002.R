@@ -1,0 +1,1 @@
+p <- c("SingleR","celldex","SummarizedExperiment","BiocParallel","Seurat","Matrix"); for (x in p) { cat(x, if (requireNamespace(x,quietly=TRUE)) as.character(packageVersion(x)) else "ABSENT", "\n"); }

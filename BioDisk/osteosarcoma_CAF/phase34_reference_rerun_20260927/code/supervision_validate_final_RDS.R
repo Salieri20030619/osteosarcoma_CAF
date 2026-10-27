@@ -1,0 +1,3 @@
+suppressPackageStartupMessages(library(infercnv))
+O<-"/mnt/BioDisk/wangmingyuan/osteosarcoma_CAF/phase34_reference_rerun_20260927"
+for(sm in c('SCPCS000614','SCPCS000610'))for(v in c('immune_endothelial_reference','lymphoid_reference')){x<-readRDS(file.path(O,'cnv_reference',sm,v,'run.final.infercnv_obj'));a<-read.delim(file.path(O,'inputs',sm,paste0(v,'_annotations.tsv')),header=FALSE);stopifnot(inherits(x,'infercnv'),all(is.finite(x@expr.data)),setequal(colnames(x@expr.data),a[[1]]),setequal(colnames(x@expr.data)[unlist(x@reference_grouped_cell_indices,use.names=FALSE)],a[a[[2]]=='reference',1]));cat(sm,v,'FINAL_RDS_AND_REFERENCE_OK\n');rm(x);gc()}

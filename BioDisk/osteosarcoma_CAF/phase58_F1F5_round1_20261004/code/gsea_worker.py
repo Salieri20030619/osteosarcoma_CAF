@@ -1,0 +1,6 @@
+from common import *
+import sys,gseapy as gp
+job=json.loads(Path(sys.argv[1]).read_text());libs=json.loads((O/'resources/libraries_canonical.json').read_text());rank=read(Path(job['rank']));bg=set(rank.symbol);M=len(bg);sets={k:sorted(set(v)&bg) for k,v in libs[job['library']].items() if 0<len(set(v)&bg)<M};dest=O/'objects/gsea'/job['job_id'];dest.mkdir(parents=True,exist_ok=True)
+res=gp.prerank(rnk=rank[['symbol','mean_delta']],gene_sets=sets,outdir=str(dest),min_size=1,max_size=M-1,permutation_num=1000,threads=4,seed=20261001,no_plot=True,verbose=False)
+x=res.res2d.copy();x['layer']='expanded';x['dataset']=job['dataset'];x['contrast']=job['contrast'];x['kind']='main';x['class_id']=job['class_id'];x['N_matched_patients']=job['N'];x['library']=job['library'];x['P_type']='gene_set_permutation_model';x['GSEA_model_P']=pd.to_numeric(x['NOM p-val']);x['model_BH_FDR']=multipletests(x.GSEA_model_P.fillna(1),method='fdr_bh')[1];x['finite_permutation_zero_P']=x.GSEA_model_P.eq(0);x.to_csv(job['output'],sep='\t',index=False)
+dump(dest/'ACCEPTANCE.json',{'rows':len(x),'ranking_genes':len(rank),'gene_sets':len(sets),'N_patients':job['N'],'P_type':'gene-set permutation, not independent patient test'});print('GSEA_COMPLETE',job['job_id'],len(x),flush=True)

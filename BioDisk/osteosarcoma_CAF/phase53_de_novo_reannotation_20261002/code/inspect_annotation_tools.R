@@ -1,0 +1,1 @@
+suppressPackageStartupMessages(library(SingleR)); print(args(SingleR));print(args(trainSingleR));print(args(classifySingleR)); x<-readRDS("/mnt/BioDisk/wangmingyuan/osteosarcoma_CAF/phase26_client_reanalysis_20260922/cnv/copykat/SCPCS000246/copykat_result.rds"); print(names(x));print(lapply(x,dim)); print(head(x$CNAmat[,1:min(6,ncol(x$CNAmat))]));

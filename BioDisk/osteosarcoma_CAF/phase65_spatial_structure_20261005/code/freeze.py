@@ -1,0 +1,16 @@
+from pathlib import Path
+import json,datetime,hashlib,pandas as pd
+B=Path('/mnt/BioDisk/wangmingyuan/osteosarcoma_CAF');O=B/'phase65_spatial_structure_20261005'
+for d in ['code','resources','tables','objects','figures/maps','QA','logs','delivery']:(O/d).mkdir(parents=True,exist_ok=True)
+struct=json.loads((B/'phase63_matrix_resistance_20261005/resources/POSTHOC_COLLAGEN_STRUCTURE_PROTOCOL.json').read_text())['panels']
+contexts={'fibro_context':['DCN','LUM','PDGFRA','FBLN1','DPT','PI16'],'mural_context':['RGS5','CSPG4','NOTCH3','KCNJ8','ABCC9','MCAM'],'endothelial_context':['PECAM1','CDH5','VWF','KDR','ESAM','EMCN'],'osteogenic_context':['RUNX2','SP7','ALPL','BGLAP','IBSP','IFITM5']}
+assert not set().union(*map(set,struct.values()))&set().union(*map(set,contexts.values()))
+drops={'fibrillar_I_III_V':['COL1A1','COL1A2'],'collagen_IV':['COL4A1','COL4A2'],'cartilage_matrix':['COL2A1','ACAN']}
+p={'at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'structure':struct,'contexts':contexts,'drop_dominant':drops,'role':'Exploratory source-compatible RNA-context validation; these analyst panels are not validated cell classifiers. No independent pathology or physical matrix measurements.','score':'Mean log1p(full-library CP10k) across measured genes; >=80% feature coverage and minimum3. Full and predeclared dominant-pair removal.','models':{'raw':[],'depth_xy':['log_library','x','y'],'mutual_contexts':['log_library','x','y','other3contexts']},'spatial_tests':'Per-slice rank correlations. Average repeated slice within patient/site/event, events within patient/site, sites within patient; exact patient-level sign flips, two-sided. All19 and primary-only separately. N<10 exploratory. No spot-level P.','FDR':'12 structure-context correlations per version/model/cohort scope; 9 source-preference contrasts as a separate family per version/model/scope. Raw P<.05 nominal; BH reported; no FDR filtering prerequisite.','contrasts':[['fibro_context','osteogenic_context'],['endothelial_context','fibro_context'],['mural_context','fibro_context']],'robustness':'Leave-one-patient-out mean effect range, sign preservation and patient sign counts; no repeated leave-one-out P screening. Candidate prior patient effects audited separately; N1 no bootstrap/inference.','inherited':'Original8174 F1-F5/33states/confidences retained. No new unsupervised classification. Phase64 clinical null result retained.','source_refs':['https://www.nature.com/articles/s41467-020-17740-1','https://pmc.ncbi.nlm.nih.gov/articles/PMC8436943/'],'scope':'Source distinction and robustness, not spatial shell proof or resistance causality.'}
+q=O/'resources/PROTOCOL_FROZEN.json'
+assert not q.exists(),'Existing frozen protocol; inspect instead of overwriting'
+q.write_text(json.dumps(p,indent=2,ensure_ascii=False))
+(O/'resources/PREVIOUS_CURRENT.json').write_bytes((B/'CAF_NEXT_STAGE_CURRENT.json').read_bytes())
+d=pd.read_csv(B/'phase46_spatial_functional_20261001/tables/all_spot_RNA_and_components.tsv.gz',sep='\t',usecols=['sample','patient_id','site_group','event_month'])
+print('SPATIAL',len(d),d.patient_id.nunique(),d.site_group.value_counts().to_dict(),d.groupby('site_group').patient_id.nunique().to_dict())
+print('PROTOCOL_FROZEN',hashlib.sha256(q.read_bytes()).hexdigest())

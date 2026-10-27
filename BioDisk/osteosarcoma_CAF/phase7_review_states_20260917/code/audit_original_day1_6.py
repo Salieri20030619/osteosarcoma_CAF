@@ -1,0 +1,43 @@
+"""SYNTAX_CHECK: python -m py_compile code/audit_original_day1_6.py
+RUN_COMMAND: python code/audit_original_day1_6.py
+EXPECTED_SUCCESS_MARKER: ORIGINAL_DAY1_6_AUDIT_RECORDED
+"""
+from pathlib import Path
+import json,datetime,csv
+r=Path('/mnt/BioDisk/wangmingyuan/osteosarcoma_CAF');p=r/'phase7_review_states_20260917';rows=[]
+def item(day,work,status,evidence,gap,action):rows.append({'计划阶段':day,'工作项':work,'当前状态':status,'证据':evidence,'缺项或边界':gap,'处理':action})
+def done(name):return (p/name).exists()
+item('1至2天','当前入组矩阵下载与可读性','已完成','phase4_download_20260914/completion_audit_20260916.json；phase3接管审计','17个新组织与7个既有样本，不能外推到全部候选队列','沿用已核验输入')
+item('1至2天','原定GSE318840 GSE162454 GSE21257可用性验收','未闭环','当前项目manifest没有这三队列的已验收表达输入','公开登记或论文声明不等于矩阵已读入；GSE21257为表达芯片而非RNA-seq counts','列为原定早期准备缺项；第7至8天实际验证仍属后续工作，不宣称已完成')
+item('1至2天','首版队列及路线确认','本次补充记录','GSE152048实际严格CAF；GSE270231既有集合；GSE299023独立来源初筛','此前未形成与原计划逐项对应的最终路线表','本期以GSE152048为发现基础，其他实际集合分队列观察；未验收队列保留待验证身份，不追溯伪称第2天已冻结')
+item('1至2天','患者组织样本建库四层主表','主表框架已补齐，建库映射仍部分缺失','review/active_patient_tissue_sample_library_master.tsv','24个实际分析单元、89个GEO样本记录；捕获建库ID和部分患者映射未解决；不把GSM自动当建库','未知字段显式保留；按组织矩阵处理的双细胞估计不冒充逐capture分析')
+item('1至2天','PDX与重复记录排除','当前队列已审计，ScPCA扩展仍有依赖','phase4来源manifest；本机ScPCA_source_sample_audit原表','ScPCA的非PDX字段筛选不等于CAF确认；跨队列患者去重未全部建立','当前分析不混入PDX；ScPCA文件在本机保留核查，自动审批未允许上传')
+item('1至2天','公开临床表完整提取','已补提取可见遗漏字段','review/clinical_enriched_20260917.tsv；review/early_metadata_audit.json','GSE152048病理类型 尺寸 坏死率 Ki67已补齐；所核对补充表没有逐患者年龄性别','区分源表未报告与尚未核验字段；不猜补年龄或性别')
+item('1至2天','肺转移史与采样时间分组','数据依赖，未作未经证实的分组','phase4 clinical_source_audit；临床上下文表','A/B1及同步骨肺配对条件不齐；原发组织不等于无肺转移','保留骨病灶/B2替代路径；单一肺CAF患者时只做描述性比较')
+item('1至2天','ScPCA临床询问及回复','已有记录，部分状态待确认','本机申请邮件稿及SCPCP000023作者回复审计','23项目已有回复且额外临床数据无法补充；17/18有申请稿不等于已发送或已回复','不重复索要已明确无新增信息的资料；不擅自向外发邮件')
+item('1至2天','正常肺参考来源与实际使用','已核查标志来源；分析结果待执行' if not done('analysis/COMPLETE') else '按公开标志组合路径执行','resources/lung_reference_signatures.json','组织学正常肺不自动称健康志愿者；未加载独立正常肺表达矩阵','按原计划允许的公开标志组合比对，记录来源与覆盖，不作迁移或来源证明')
+item('1至2天','正常骨 骨折 不愈合来源分类','已发现并纠正来源风险；健康骨参考仍未验收','resources/reference_source_audit.json','GSE169396为骨关节炎伴骨量减少患者；GSE233676为不愈合组织；均不能当健康正常骨','分别登记；本期程序与恶性及其他细胞比较不冒充健康骨对照分析')
+item('3至4天','逐样本QC和双细胞识别','已完成并保留异常阈值标记','phase5 results/sample_summary.tsv；逐样本all_cells_qc','3个样本自动双细胞阈值需复核，不能按固定比例补删','在后续QC敏感性中保留检查；无可用capture映射时明确组织矩阵分析单位')
+item('3至4天','环境RNA评估及条件性校正','表达筛查已完成，未做环境RNA校正','phase5 review/cross_lineage_expression_screen.tsv','当前输入缺配套完整空液滴矩阵；跨谱系表达比例不是污染率估计','不把SoupX/CellBender标作已做；apCAF及混合程序保持候选定位，原始液滴可用时再校正')
+item('3至4天','全细胞谱系复核','已完成基础复核','phase6 review/manual_lineage_review.tsv；逐细胞身份证据','30项具名marker复核；待定细胞保留','复用现有UMAP，重画最终复核标签图')
+item('3至4天','最终标签全细胞图谱','已完成' if done('analysis/LINEAGE_COMPARISON_COMPLETE') else '待补，已准备执行','figures/*_reviewed_atlas.png','此前phase5图仍为初筛标签，不能等同最终身份图','在当前执行链补出17个样本的最终标签图')
+item('3至4天','周细胞与血管平滑肌独立区分','已完成表达证据分型' if done('analysis/mural_pericyte_SMC_review.tsv.gz') else '待补，已准备执行','analysis/mural_pericyte_SMC_review.tsv.gz','此前Mural_SMC合并；分型必须保留混合和不确定类别','按RGS5 CSPG4 ABCC9等与MYH11 ACTG2 CNN1等的多基因证据分型；不修改CNV原始证据')
+item('3至4天','双方法CNV和独立核查','复核完成' if done('review/final_identity_audit.json') else '补充复核正在进行','phase6基础34任务；phase7 scevan与参考审计','原基础任务2项失败；低复杂度与参考不足不能通过降低阈值消除','参考检查按原始冻结谱系重算；失败和分歧不当CNV阴性')
+item('3至4天','CAF纳入排除与原始矛盾证据','已形成基础集合；复核版审计'+('已完成' if done('review/final_identity_audit.json') else '待完成'),'identity/all_cell_identity_evidence.tsv.gz；review/final_identity_audit.json','候选身份不等同临床可用结论','保留严格和扩展集合及逐细胞排除依据')
+item('5至6天','CAF状态与条件性myCAF细分','已完成数值与生物学复核' if done('analysis/COMPLETE') else '待执行，脚本已准备','analysis/state_support_and_programs.tsv；mycaf_subdivision_status.json','myCAF细分须满足预设细胞数和跨患者支持，不强制生成新亚群','达不到条件则交付较高层级状态和连续程序')
+item('5至6天','患者批次 细胞周期 应激诊断','已完成数值复核' if done('analysis/COMPLETE') else '待执行','患者组成表；状态程序表；分辨率与QC敏感性','患者主导的簇不能命名为普遍新CAF亚群','独立患者支持和技术程序同时核查')
+item('5至6天','患者层面比例和counts pseudobulk','已完成数值验收' if done('analysis/COMPLETE') else '待执行','patient_by_state_fractions.tsv；patient_pseudobulk_counts.tsv.gz','细胞数不是统计样本量；临床缺组不能补推','病例为重复单位；比例分母和零候选组织分别说明')
+item('5至6天','差异基因及统计表','已完成数值验收' if done('analysis/COMPLETE') else '待执行','state_gene_effects_all.tsv.gz；patient_paired_state_gene_effects.tsv.gz','状态为数据驱动探索；小样本离散P值分辨率有限','有效配对患者>=3时作精确符号翻转检验，按每状态基因假设族BH；不足不检验')
+item('5至6天','成骨 矿化 钙调节及核心基因覆盖','已完成数值复核' if done('analysis/COMPLETE') else '待执行','gene_panels.json；program_gene_coverage.tsv；患者基因表达表','预设候选模块不是直接机制或蛋白证据','报告真实覆盖 方向 效应量及逐患者结果')
+item('5至6天','CAF与恶性成骨及其他谱系比较','已完成数值复核' if done('analysis/LINEAGE_COMPARISON_COMPLETE') else '待执行，已补入','sample_lineage_program_expression.tsv；CAF_vs_malignant_gene_specificity.tsv','只看CAF内部不足以说明基因的CAF特异性','比较原计划核心程序及其他谱系的误入信号')
+item('5至6天','治疗与病灶模型可识别性','已完成数值复核' if done('analysis/DESIGN_AUDIT_COMPLETE') else '待下游结果形成后检验','analysis/patient_metadata.tsv；临床补全表','单一肺转移患者或治疗与分组混杂不能靠统计调整解决','先列分组交叉表和设计矩阵秩；只对有效生物学重复允许的比较作推断')
+item('第6天验收','中期报告和可复核交付','文字及数值版已形成；图件视觉验收待完成','resources/interim_report_scope.json','脚本准备或任务启动不能当分析完成；图表视觉审查仍须验收','报告逐项区分完成 未完成与数据依赖，不提前标记第7至8天验证完成')
+refs=[{'reference':'GSE169396','source_class':'diseased non-tumor bone','decision':'not healthy-normal bone','evidence':'31-year-old male with osteoarthritis and osteopenia, femoral head; same donor as GSE147390','url':'https://www.frontiersin.org/journals/endocrinology/articles/10.3389/fendo.2023.1107511/full'}, {'reference':'GSE233676','source_class':'human fracture nonunion','decision':'not healthy-normal bone and not ordinary healing fracture','evidence':'nonunion corrective surgery 300 days after injury, one 63-year-old male','url':'https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE233676'}, {'reference':'lung reference marker panels','source_class':'published histologically normal human lung','decision':'use explicit signature-only route; no normal expression atlas loaded','evidence':'alveolar and adventitial localization marker sets','url':'https://pmc.ncbi.nlm.nih.gov/articles/PMC7704697/'}]
+(p/'resources/reference_source_audit.json').write_text(json.dumps(refs,indent=2))
+registry=[{'dataset':'GSE152048','role':'current discovery','expression_acceptance':'complete','clinical_acceptance':'public table extracted; missing timeline and age/sex mapping explicit'}, {'dataset':'GSE270231','role':'existing separate-cohort exploratory evidence','expression_acceptance':'complete','clinical_acceptance':'some patient mappings unresolved'}, {'dataset':'GSE299023','role':'additional direct-patient cohort','expression_acceptance':'complete','clinical_acceptance':'lung history missing; not group A'}, {'dataset':'GSE318840','role':'original planned validation','expression_acceptance':'not accepted in current project','clinical_acceptance':'sample-level supplement and FLEX coverage remain to audit','url':'https://pmc.ncbi.nlm.nih.gov/articles/PMC13330631/'}, {'dataset':'GSE162454','role':'original planned primary-lesion validation','expression_acceptance':'not accepted in current project','clinical_acceptance':'six primary tissues; not automatically A; deduplicate reuse in later studies','url':'https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE162454'}, {'dataset':'GSE21257','role':'planned bulk outcome validation in days7-8','expression_acceptance':'not accepted in current project','clinical_acceptance':'53 pre-chemotherapy biopsies, 5-year metastasis definition; site and baseline timing require patient-level audit','platform':'GPL10295 Illumina expression beadchip, nuIDs; not RNA-seq counts','url':'https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=gse21257'}]
+(p/'resources/cohort_route_audit.json').write_text(json.dumps(registry,indent=2))
+with (p/'review/original_day1_6_checklist.tsv').open('w') as f:w=csv.DictWriter(f,fieldnames=list(rows[0]),delimiter='\t');w.writeheader();w.writerows(rows)
+md=['# 原计划第1至6天工作覆盖审计','', '审计依据为用户指定的2026年9月10日原计划和当前实际文件。状态按本次检查时间记录，不追溯宣称早期已完成。','', '| 阶段 | 工作项 | 当前状态 | 缺项或边界 | 处理 |','| --- | --- | --- | --- | --- |']
+for x in rows:md.append('| '+' | '.join(str(x[k]).replace('|','／') for k in ['计划阶段','工作项','当前状态','缺项或边界','处理'])+' |')
+md+=['','## 本轮需要补齐的可执行事项','','统一当前样本四层主表框架与临床补充字段已补录。最终标签全细胞图、周细胞与血管平滑肌分型、正常肺标志比对、CAF与其他谱系比较已执行并通过数值复核；图件文件完整性通过，逐图视觉排版验收待完成。','','## 明确保留的未完成与数据依赖','','原定三个验证或结局队列的完整早期可用性验收尚未闭环。健康正常骨参考尚未验收；GSE169396和GSE233676已按疾病来源排除出健康参考。缺少capture映射、A/B1时间信息、部分ScPCA患者映射和配对CAF信息量的工作不能假称完成。ScPCA原映射表保留本机，上传被自动审批拒绝，审计未因此改写成已同步。','','## 与第7至8天的分工','','独立验证、bulk结局分析、膜定位和抗体证据排序属于第7至8天，本轮不把这些后续分析列为第5至6天结果；但相关队列原定第1至2天的数据可用性验收仍如实列为未闭环。','']
+(p/'docs/原计划第1至6天工作覆盖审计.md').write_text('\n'.join(md),encoding='utf-8');print('ORIGINAL_DAY1_6_AUDIT_RECORDED',len(rows),datetime.datetime.now(datetime.timezone.utc).isoformat(),flush=True)

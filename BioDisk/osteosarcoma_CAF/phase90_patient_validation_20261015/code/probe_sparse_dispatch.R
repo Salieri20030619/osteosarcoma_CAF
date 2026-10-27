@@ -1,0 +1,8 @@
+suppressPackageStartupMessages({library(Matrix);library(infercnv)})
+f<-get('.build_and_add_hspike',envir=asNamespace('infercnv'))
+r<-get('rowMeans',envir=environment(f))
+x<-Matrix(matrix(1:12,nrow=3),sparse=TRUE)
+cat('rowMeans namespace:',environmentName(environment(r)),'\n')
+print(tryCatch(r(x),error=function(e) conditionMessage(e)))
+print(r(as.matrix(x)))
+stopifnot(identical(as.numeric(Matrix::rowMeans(x)),as.numeric(r(as.matrix(x)))))

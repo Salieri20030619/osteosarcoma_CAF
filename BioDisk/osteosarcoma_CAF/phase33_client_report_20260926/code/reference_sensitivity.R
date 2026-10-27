@@ -1,0 +1,35 @@
+
+args<-commandArgs(TRUE);stopifnot(length(args)==2L);sm<-args[1];variant<-args[2]
+P<-'/mnt/BioDisk/wangmingyuan/osteosarcoma_CAF';B<-file.path(P,'phase26_client_reanalysis_20260922');O<-file.path(P,'phase33_client_report_20260926');d<-file.path(B,'inputs',sm);out<-file.path(O,'cnv_reference',sm,variant)
+dir.create(out,recursive=TRUE,showWarnings=FALSE)
+.libPaths(c(file.path(P,'phase3_identity_20260914/Rlib'),.libPaths(),'/mnt/BioDisk/wangmingyuan/miniconda3/envs/R_4.5.2/lib/R/library'))
+
+# Process-level locking lets queued and proactively scheduled invocations share the same completed result.
+if(Sys.getenv('CAF_REFERENCE_LOCK_HELD')!='1'){
+ Sys.setenv(CAF_REFERENCE_LOCK_HELD='1')
+ rc<-system2('flock',c('-x',shQuote(file.path(out,'execution.lock')),shQuote('/mnt/BioDisk/wangmingyuan/project26210_envs/phase11_infercnv_conda_v2/bin/Rscript'),'--vanilla',shQuote(file.path(O,'code/reference_sensitivity.R')),shQuote(sm),shQuote(variant)))
+ quit(status=rc)
+}
+if(file.exists(file.path(out,'COMPLETE')) && file.exists(file.path(out,'cell_results.tsv')))quit(status=0)
+
+suppressPackageStartupMessages({library(Matrix);library(data.table);library(jsonlite);library(infercnv)})
+options(scipen=100);set.seed(20260922)
+tryCatch({
+ cells<-as.data.frame(fread(file.path(d,'cells.tsv')));genes<-as.data.frame(fread(file.path(d,'genes.tsv')))
+ x<-as(readMM(gzfile(file.path(d,'counts.mtx.gz'))),'CsparseMatrix');dimnames(x)<-list(genes$ensembl,cells$tool_id)
+ stopifnot(ncol(x)==nrow(cells),nrow(x)==nrow(genes),all(abs(colSums(x)-cells$n_counts)<1e-6))
+ af<-file.path(O,'inputs',sm,paste0(variant,'_annotations.tsv'))
+ annotation<-read.delim(af,header=FALSE)
+ params<-list(sample=sm,variant=variant,source_cells=ncol(x),source_genes=nrow(x),reference_cells=sum(annotation[[2]]=='reference'),infercnv_version=as.character(packageVersion('infercnv')),seed=20260922,cutoff=.1,HMM=TRUE,HMM_type='i6',denoise=TRUE,threads=4,project_entry_gate_added=FALSE,comparison='same full called-cell matrix and native inferCNV recipe; only reference membership varies')
+ write_json(params,file.path(out,'parameters.json'),auto_unbox=TRUE,pretty=TRUE)
+ ic<-infercnv::CreateInfercnvObject(raw_counts_matrix=x,annotations_file=af,delim='\t',gene_order_file=file.path(P,'geo_cnv_20260918/resources/infercnv_gene_order_GRCh38_98.tsv'),ref_group_names='reference')
+ ic<-infercnv::run(ic,cutoff=.1,out_dir=out,HMM=TRUE,HMM_type='i6',denoise=TRUE,num_threads=4,plot_steps=FALSE,save_rds=FALSE,save_final_rds=TRUE,write_expr_matrix=FALSE,output_format='png')
+ gf<-list.files(out,pattern='^17_HMM.*cell_groupings$',full.names=TRUE);rf<-list.files(out,pattern='^HMM_CNV_predictions.*Pnorm_.*pred_cnv_regions.dat$',full.names=TRUE)
+ stopifnot(length(gf)==1L,length(rf)==1L)
+ gr<-as.data.frame(fread(gf));regions<-as.data.frame(fread(rf))
+ stopifnot(all(c('cell_group_name','cell') %in% names(gr)),all(c('cell_group_name','state') %in% names(regions)))
+ altered<-unique(regions$cell_group_name[regions$state!=3]);j<-match(cells$tool_id,gr$cell);ok<-!is.na(j)
+ calls<-rep('not_returned_by_software',nrow(cells));calls[ok]<-ifelse(gr$cell_group_name[j[ok]] %in% altered,'alteration_called','no_alteration_called')
+ stopifnot(any(ok));fwrite(data.table(cell_id=cells$cell_id,call=calls),file.path(out,'cell_results.tsv'),sep='\t')
+ sink(file.path(out,'sessionInfo.txt'));print(sessionInfo());sink();writeLines('NATIVE_INFER_CNV_REFERENCE_VARIANT_COMPLETE',file.path(out,'COMPLETE'))
+},error=function(e){writeLines(conditionMessage(e),file.path(out,'FAILED'));cat(conditionMessage(e),'\n');quit(status=1)})

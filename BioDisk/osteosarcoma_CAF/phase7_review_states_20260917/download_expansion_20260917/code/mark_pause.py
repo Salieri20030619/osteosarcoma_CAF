@@ -1,0 +1,3 @@
+from pathlib import Path
+import json,datetime
+p=Path.cwd();root=p/'download_expansion_20260917';s=json.loads((root/'STATUS.json').read_text());f=root/'geo_download_completion.json';s['state']='PAUSED_AFTER_DOWNLOAD_ATTEMPTS';s['finished_utc']=datetime.datetime.now(datetime.timezone.utc).isoformat();s['GEO_completion']=json.loads(f.read_text()) if f.exists() else {'status':'runner_exited_without_completion_file; inspect logs'};(root/'STATUS.json').write_text(json.dumps(s,indent=2));state=p.parent/'PROJECT_STATE.json';z=json.loads(state.read_text());z['current_status']='PAUSED_AFTER_DOWNLOAD_ATTEMPTS';z['download_expansion']=s;state.write_text(json.dumps(z,ensure_ascii=False,indent=2));print('PAUSED_AFTER_DOWNLOAD_ATTEMPTS')

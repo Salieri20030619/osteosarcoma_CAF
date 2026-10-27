@@ -1,0 +1,16 @@
+from pathlib import Path
+import pandas as pd,numpy as np,math,matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+B=Path(r'C:\Users\31937\CAF_delivery_20261001\inputs');E=B/'phase47_external_candidate_integration_20261001';Q=B/'phase48_clinical_programs_delivery_20261001';S=B/'phase46_spatial_functional_20261001';F=Q/'figures';F.mkdir(exist_ok=True)
+labels={'NABA_CORE_MATRISOME':'Matrix core','NABA_COLLAGENS':'Collagens','HALLMARK_EPITHELIAL_MESENCHYMAL_TRANSITION':'EMT','HALLMARK_GLYCOLYSIS':'Glycolysis','HALLMARK_INTERFERON_ALPHA_RESPONSE':'IFN-alpha','HALLMARK_INTERFERON_GAMMA_RESPONSE':'IFN-gamma','HALLMARK_ANGIOGENESIS':'Angiogenesis','HALLMARK_TGF_BETA_SIGNALING':'TGF-beta','HALLMARK_G2M_CHECKPOINT':'G2M','HALLMARK_PROTEIN_SECRETION':'Secretion','HALLMARK_OXIDATIVE_PHOSPHORYLATION':'OXPHOS','F3_SELECTED_REMODELING':'F3 remodelling','F4_SELECTED_GENES':'F4 genes','OSTEOGENIC_REFERENCE':'Osteogenic','MINERAL_REFERENCE':'Mineral'}
+s=pd.read_csv(E/'tables/main_functional_program_patient_statistics.tsv',sep='\t');w=s.pivot(index='endpoint',columns='class_id',values='mean_effect').reindex(list(labels));lim=math.ceil(np.abs(w.to_numpy()).max()*2)/2;fig,ax=plt.subplots(figsize=(6.8,6.2));im=ax.imshow(w,cmap='RdBu_r',vmin=-lim,vmax=lim,aspect='auto');ax.set_yticks(range(len(w)),[labels[k] for k in w.index],fontsize=10);ax.set_xticks([0,1],['F3 supported','F4 expanded'],fontsize=10);fig.colorbar(im,ax=ax,label='Mean log2 delta',fraction=.06,pad=.06);fig.tight_layout();fig.savefig(F/'main_functional_programs.png',dpi=180,bbox_inches='tight');plt.close(fig)
+s=pd.read_csv(S/'tables/spatial_patient_statistics.tsv',sep='\t');eps=['CD8_raw','CD8_adjusted','neighbor_CD8_adjusted','Tcell_adjusted','fibroblast_component','cancer_component'];w=s.pivot(index='program',columns='endpoint',values='mean_effect').reindex(index=list(labels),columns=eps);lim=math.ceil(np.abs(w.to_numpy()).max()*10)/10;fig,ax=plt.subplots(figsize=(8.5,6.4));im=ax.imshow(w,cmap='RdBu_r',vmin=-lim,vmax=lim,aspect='auto');ax.set_yticks(range(len(w)),[labels[k] for k in w.index],fontsize=10);ax.set_xticks(range(6),['CD8 raw','CD8 adjusted','Neighbor CD8','T-cell adjusted','Fibroblast IC','Cancer IC'],rotation=30,ha='right',fontsize=9);fig.colorbar(im,ax=ax,label='Mean rank correlation',fraction=.04,pad=.05);fig.tight_layout();fig.savefig(F/'spatial_functional_heatmap.png',dpi=180,bbox_inches='tight');plt.close(fig)
+net=pd.read_csv(E/'tables/CBFB_TGIF1_reference_network.tsv',sep='\t');fig,axs=plt.subplots(1,2,figsize=(11,4.6))
+for ax,reg in zip(axs,['CBFB','TGIF1']):
+ t=net[net.regulator.eq(reg)].sort_values('target_symbol');n=len(t);ax.scatter([0],[0],s=550,color='#b86b3c');ax.text(0,0,reg,ha='center',va='center',fontsize=9,color='white')
+ for j,r in enumerate(t.itertuples(index=False)):
+  y=(j-(n-1)/2)*.45;color='#257b7f' if r.weight>0 else '#b45b70';ax.annotate('',xy=(1.05,y),xytext=(.15,0),arrowprops=dict(arrowstyle='->',color=color,alpha=.8));ax.text(1.1,y,r.target_symbol,fontsize=10,va='center')
+ ax.set_title(reg+' signed targets');ax.set_xlim(-.3,2);ax.set_ylim(-max(1,n*.25),max(1,n*.25));ax.set_axis_off()
+fig.suptitle('Signed reference network and RNA target response');fig.tight_layout();fig.savefig(F/'TF_reference_network.png',dpi=180,bbox_inches='tight');plt.close(fig)
+print('THREE_PUBLICATION_FIGURES_REVISED')

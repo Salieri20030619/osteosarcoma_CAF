@@ -1,0 +1,6 @@
+from pathlib import Path
+import subprocess,sys,json,datetime,hashlib,fcntl
+O=Path('/mnt/BioDisk/wangmingyuan/osteosarcoma_CAF/phase122_HLCA_supplement_20261026');stage=sys.argv[1];script=O/'code'/sys.argv[2];lock=(O/(stage+'.lock')).open('a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB);attempt=len(list((O/'resources').glob(stage+'_attempt*.json')))+1;log=O/'logs'/(stage+'_attempt'+str(attempt)+'.log');start=datetime.datetime.now(datetime.timezone.utc).isoformat()
+with log.open('w',encoding='utf-8') as f:
+ child=subprocess.Popen(['/mnt/BioDisk/wangmingyuan/miniconda3/envs/cell2loc/bin/python','-u',str(script)],stdout=f,stderr=subprocess.STDOUT,start_new_session=True);(O/(stage+'_PROCESS.json')).write_text(json.dumps(dict(stage=stage,pid=child.pid,log=str(log),started_at=start)),encoding='utf-8');print('STARTED',stage,child.pid,flush=True);rc=child.wait()
+rec=dict(stage=stage,attempt=attempt,exit_code=rc,started_at=start,finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),log=str(log),code_sha256=hashlib.sha256(script.read_bytes()).hexdigest());(O/'resources'/(stage+'_attempt'+str(attempt)+'.json')).write_text(json.dumps(rec,indent=2),encoding='utf-8');print(json.dumps(rec));print(log.read_text()[-2500:]);sys.exit(rc)

@@ -1,0 +1,37 @@
+options(stringsAsFactors=FALSE)
+suppressPackageStartupMessages({library(SingleR);library(SummarizedExperiment);library(Matrix);library(rhdf5)})
+args<-commandArgs(TRUE);stopifnot(length(args)==1)
+dataset<-args[1];root<-"/mnt/BioDisk/wangmingyuan/osteosarcoma_CAF/phase53_de_novo_reannotation_20261002"
+inp<-file.path(root,"objects",dataset,"reference_input.h5")
+genes<-as.character(h5read(inp,"genes"));ids<-as.character(h5read(inp,"profiles"));test<-h5read(inp,"logcounts")
+if(identical(dim(test),c(length(ids),length(genes))))test<-t(test)
+stopifnot(identical(dim(test),c(length(genes),length(ids))),!any(genes%in%c("COL1A1","LOX","MMP14")))
+dimnames(test)<-list(genes,ids)
+map<-read.delim(file.path(root,"resources","reference_gene_crosswalk.tsv"),check.names=FALSE)
+results<-list()
+for(name in c("HPCA","BlueprintEncode")){
+ message("ANNOTATE ",dataset," ",name)
+ ref<-readRDS(file.path(root,"resources",paste0(name,"reference.rds")))
+ tr<-map[map$reference==name,];g<-tr$canonical_symbol[match(rownames(ref),tr$original_symbol)]
+ stopifnot(!anyNA(g))
+ mat<-assay(ref,"logcounts")
+ if(anyDuplicated(g)){
+  ag<-rowsum(as.matrix(mat),group=g,reorder=FALSE);ag<-ag/as.numeric(table(factor(g,levels=rownames(ag))))
+ }else{ag<-as.matrix(mat);rownames(ag)<-g}
+ keep<-!rownames(ag)%in%c("COL1A1","LOX","MMP14")
+ ag<-ag[keep,,drop=FALSE]
+ good<-colSums(abs(test))>0
+ ans<-SingleR(test=test[,good,drop=FALSE],ref=ag,labels=ref$label.main,num.threads=8,prune=TRUE)
+ stopifnot(identical(rownames(ans),colnames(test)[good]))
+ tab<-data.frame(profile_id=ids,reference=name,label="Unassessable_zero_expression",pruned_label=NA_character_,delta_next=NA_real_,top_score=NA_real_)
+ tab$label[good]<-ans$labels;tab$pruned_label[good]<-ans$pruned.labels;tab$delta_next[good]<-ans$delta.next
+ tab$top_score[good]<-apply(ans$scores,1,max)
+ scores<-matrix(NA_real_,nrow=length(ids),ncol=ncol(ans$scores),dimnames=list(ids,colnames(ans$scores)));scores[good,]<-ans$scores
+ write.table(data.frame(profile_id=ids,scores,check.names=FALSE),gzfile(file.path(root,"tables",dataset,paste0(name,"_reference_scores.tsv.gz"))),sep="\t",quote=FALSE,row.names=FALSE,na="NA")
+ saveRDS(ans,file.path(root,"objects",dataset,paste0(name,"_SingleR_result.rds")))
+ results[[name]]<-tab
+}
+out<-do.call(rbind,results);write.table(out,file.path(root,"tables",dataset,"reference_annotations.tsv"),sep="\t",quote=FALSE,row.names=FALSE,na="NA")
+writeLines(capture.output(sessionInfo()),file.path(root,"tables",dataset,"ANNOTATION_R_SESSION.txt"))
+writeLines("SUCCESS",file.path(root,"objects",dataset,"REFERENCE_ANNOTATION_COMPLETE"))
+cat("REFERENCE_ANNOTATION_COMPLETE",dataset,nrow(out),"\n")

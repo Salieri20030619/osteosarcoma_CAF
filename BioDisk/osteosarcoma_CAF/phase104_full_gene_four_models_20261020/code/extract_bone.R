@@ -1,0 +1,17 @@
+suppressPackageStartupMessages(library(Seurat))
+R <- "/mnt/BioDisk/wangmingyuan/osteosarcoma_CAF"
+P <- file.path(R,"phase104_full_gene_four_models_20261020")
+x <- readRDS(file.path(R,"phase97_normal_background_20261020/inputs/bone_msc_verified.rds"))
+m <- x[[]];raw <- GetAssayData(x,assay="RNA",layer="counts")
+stopifnot(identical(colnames(raw),rownames(m)))
+donor <- sub("_MACS$","",as.character(m$orig.ident))
+sel <- m$cluster_anno_l2=="Fibro-MSC"
+n <- table(donor[sel]);ids <- sort(names(n[n>=20]))
+stopifnot(length(ids)==5)
+lib <- Matrix::colSums(raw);stopifnot(all(lib==m$nCount_RNA))
+mat <- sapply(ids,function(d)Matrix::rowSums(raw[,sel&donor==d,drop=FALSE]))
+out <- data.frame(feature=rownames(raw),mat,check.names=FALSE)
+write.table(out,file.path(P,"tables/normal_bone_allgene_raw.tsv"),sep="\t",quote=FALSE,row.names=FALSE,fileEncoding="UTF-8")
+meta <- data.frame(donor=ids,cells=as.integer(n[ids]),library_UMIs=colSums(mat))
+write.table(meta,file.path(P,"tables/normal_bone_donor_totals.tsv"),sep="\t",quote=FALSE,row.names=FALSE,fileEncoding="UTF-8")
+cat("BONE_COMPLETE",nrow(mat),ncol(mat),sum(meta$cells),"\n")

@@ -1,0 +1,27 @@
+from pathlib import Path
+import pandas as pd,numpy as np,json,anndata as ad,gc
+P=Path('/mnt/BioDisk/wangmingyuan/osteosarcoma_CAF');O=P/'phase60_F3_review_20261005';Q=P/'phase59_four_functional_axes_20261004'
+def read(p):return pd.read_csv(p,sep='\t',low_memory=False)
+c=read(O/'tables/F3_cells_review_QC.tsv.gz');spec=json.loads((O/'resources/GENE_SETS.json').read_text());zf=np.load(O/'objects/diagnostic_counts.npz');z={k:zf[k] for k in zf.files};zf.close();rows=pd.Index(z['cells']).get_indexer(c.cell_id);gidx={g:i for i,g in enumerate(z['genes'])};panels=['MHCII','fibroblast','cycling_markers','myeloid'];out=[];expression=[]
+for mode in ['raw','corrected']:
+ v=z[mode][rows];ass=z['assayed'][rows]
+ for rule,threshold in [('nonzero',0),('at_least_0.5',.5),('at_least_1',1)]:
+  detected=v>0 if rule=='nonzero' else v>=threshold
+  m={k:detected[:,[gidx[g] for g in spec['sets'][k]]].sum(1) for k in panels};covered={k:ass[:,[gidx[g] for g in spec['sets'][k]]].mean(1)>=.8 for k in panels};e=pd.DataFrame({'cell_id':c.cell_id,'matrix':mode,'threshold_rule':rule,'MHCII_ge2':(m['MHCII']>=2)&covered['MHCII'],'fibro_ge2':(m['fibroblast']>=2)&covered['fibroblast'],'cycle_ge2':(m['cycling_markers']>=2)&covered['cycling_markers'],'PTPRC_detected':detected[:,gidx['PTPRC']],'MHCII_evaluable':covered['MHCII'],'fibro_evaluable':covered['fibroblast']});e['MHCII_fibro_co']=e.MHCII_ge2&e.fibro_ge2;e['MHCII_fibro_co_PTPRCneg']=e.MHCII_fibro_co&~e.PTPRC_detected;out.append(e)
+ for ds,donor,state,lineage in c[['dataset','donor_record','round1_state','lineage_stratum']].drop_duplicates().itertuples(index=False,name=None):
+  mask=c.dataset.eq(ds)&c.donor_record.eq(donor)&c.round1_state.eq(state)&c.lineage_stratum.eq(lineage);rr=np.flatnonzero(mask);lib=z[mode+'_library'][rows[rr]].sum()
+  for gene in sorted(set().union(*(set(spec['sets'][k]) for k in panels))):
+   j=gidx[gene];a=ass[rr,j].all();cnt=v[rr,j].sum() if a else np.nan;expression.append({'dataset':ds,'donor_record':donor,'state':state,'lineage':lineage,'matrix':mode,'gene':gene,'cells':len(rr),'total_counts':cnt,'CP10k':cnt/lib*1e4 if lib>0 else np.nan,'detected_nonzero':int((v[rr,j]>0).sum()) if a else np.nan,'detected_ge1':int((v[rr,j]>=1).sum()) if a else np.nan,'assayed':a})
+x=pd.concat(out).merge(c[['cell_id','dataset','donor_record','round1_state','lineage_stratum']],on='cell_id',validate='many_to_one');x.to_csv(O/'tables/F3_threshold_sensitivity_cells.tsv.gz',sep='\t',index=False);summ=x.groupby(['dataset','matrix','threshold_rule','donor_record','round1_state','lineage_stratum']).agg(cells=('cell_id','size'),MHCII_ge2=('MHCII_ge2','sum'),fibro_ge2=('fibro_ge2','sum'),cycle_ge2=('cycle_ge2','sum'),PTPRC_detected=('PTPRC_detected','sum'),MHCII_fibro_co=('MHCII_fibro_co','sum'),MHCII_fibro_co_PTPRCneg=('MHCII_fibro_co_PTPRCneg','sum'),MHCII_evaluable=('MHCII_evaluable','sum')).reset_index();summ.to_csv(O/'tables/F3_threshold_sensitivity_summary.tsv',sep='\t',index=False);pd.DataFrame(expression).to_csv(O/'tables/F3_patient_state_marker_expression.tsv',sep='\t',index=False)
+# Correct background MT fraction using canonical Ensembl identifiers, not an absent symbol column.
+bgq=read(O/'tables/background_QC.tsv');ann=read(P/'phase55_annotation_freeze_20261004/tables/all_cell_annotation_v2.tsv.gz');allob=read(Q/'tables/frozen_cells_with_identity.tsv.gz');mp=read(P/'phase58_F1F5_round1_20261004/resources/source_canonical_feature_map.tsv');match=read(O/'tables/UMI_matching_ledger.tsv');fix=[]
+for sampleid,g in bgq.groupby('sample_id'):
+ a=ad.read_h5ad(P/'phase53_de_novo_reannotation_20261002/blind_review/raw_counts'/f'{sampleid}.h5ad');meta=ann[ann.sample_id.eq(sampleid)&~ann.original_cell_id.isin(allob.cell_id)];ds=g.dataset.iloc[0];mtgenes=mp[(mp.dataset==ds)&mp.symbol.str.startswith('MT-',na=False)].feature;mt=a.var_names.isin(mtgenes)
+ for r in g.itertuples(index=False):
+  allowed=meta.review_lineage_code.eq('Fibro') if r.background.startswith('Fibro') else meta.review_lineage_code.isin(['Osteo','Chondro','Osteochondro']) if r.background=='Osteo' else meta.review_lineage_code.isin(['Macro','Myeloid','Mono','MonoDC','DC','pDC']);part=meta[allowed&meta.original_donor_record.eq(r.donor_record)&meta.site.eq(r.site)];ii=a.obs_names.get_indexer(part.cell_id);assert (ii>=0).all()
+  if r.background=='Fibro_UMI_matched':
+   m=match[(match.sample_id==sampleid)&(match.donor_record==r.donor_record)].iloc[0];libs=a.obs.iloc[ii].library_counts.to_numpy();ii=ii[(libs>=m.library_lower)&(libs<=m.library_upper)]
+  assert len(ii)==r.cells;den=a.obs.iloc[ii].library_counts.to_numpy();value=float(np.median(np.asarray(a.X[ii][:,mt].sum(1)).ravel()/np.maximum(den,1))) if mt.any() else np.nan;rr=r._asdict();rr['median_MT']=value;rr['mitochondrial_features_assayed']=int(mt.sum());fix.append(rr)
+ del a;gc.collect()
+pd.DataFrame(fix).to_csv(O/'tables/background_QC.tsv',sep='\t',index=False)
+qa=json.loads((O/'delivery/QA_ACCEPTANCE.json').read_text());qa['threshold_sensitivity_rules']=['nonzero','at_least_0.5','at_least_1'];qa['background_MT_canonical_mapping_corrected']=True;qa['program_and_gene_statistics_unchanged']=True;(O/'delivery/QA_ACCEPTANCE.json').write_text(json.dumps(qa,indent=2));print('SENSITIVITY_COMPLETE',flush=True);print(summ.groupby(['matrix','threshold_rule'])[['MHCII_ge2','MHCII_fibro_co','cycle_ge2','PTPRC_detected']].sum().to_string());print(pd.DataFrame(fix).to_string(index=False))

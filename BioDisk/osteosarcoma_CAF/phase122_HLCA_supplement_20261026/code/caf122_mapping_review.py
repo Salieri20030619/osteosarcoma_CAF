@@ -1,0 +1,15 @@
+from pathlib import Path
+import json,pandas as pd,numpy as np,anndata as ad
+from scipy import sparse
+R=Path('/mnt/BioDisk/wangmingyuan/osteosarcoma_CAF');O=R/'phase122_HLCA_supplement_20261026';I=R/'phase119_Bone_Lung_functional_subgroups_20261024'
+p=pd.read_csv(O/'tables/HLCA_current_cell_predictions.tsv.gz',sep='\t');w=pd.read_csv(O/'tables/HLCA_current_label_weights.tsv.gz',sep='\t');assert p.cell_id.equals(w.cell_id);summ=pd.read_csv(O/'tables/candidate_identity_patient_summary.tsv',sep='\t');summary=summ.groupby(['node_id','source','identity']).agg(patient_records=('donor','nunique'),cells=('cells','sum'),mean_patient_predicted_fraction=('predicted_fraction','mean'),mean_patient_vote=('mean_vote','mean'),mean_uncertainty=('mean_uncertainty','mean')).reset_index();summary.to_csv(O/'tables/candidate_identity_source_summary.tsv',sep='\t',index=False)
+print(summary[['node_id','source','identity','patient_records','mean_patient_predicted_fraction','mean_patient_vote']].to_string(index=False),flush=True)
+val=pd.read_csv(O/'tables/reference_donor_exclusion_validation.tsv',sep='\t');r=val[val.available.gt(0)].copy();r['correct']=r.label.eq(r.pred);vc=r.groupby('label').agg(heldout_cells=('correct','size'),accuracy=('correct','mean'));vc.to_csv(O/'tables/reference_identity_validation_by_class.tsv',sep='\t');print('VALIDATION',vc.to_dict(),flush=True)
+q=ad.read_h5ad(O/'objects/query_model_counts.h5ad');old=ad.read_h5ad(R/'phase32_lung_sensitivity_20260926/objects/HLCA_query_raw2000.h5ad');common=q.obs_names.intersection(old.obs_names);a=q[common,old.var_names].X;b=old[common].X;diff=a-b;mx=float(abs(diff.data).max()) if diff.nnz else 0.;print('HISTORICAL_RAW_COUNT_DIFFERENCE',len(common),mx,flush=True)
+presence=sparse.load_npz(R/'phase41_full_transcriptome_setup_20261001/objects/sample_feature_presence.npz');si=pd.read_csv(R/'phase41_full_transcriptome_setup_20261001/tables/feature_presence_sample_index.tsv',sep='\t').set_index('sample').presence_row;full=ad.read_h5ad(R/'phase41_full_transcriptome_setup_20261001/objects/all_candidate_full_genes.h5ad',backed='r');cols=full.var_names.get_indexer(q.var_names);assert (cols>=0).all();rows=[]
+for sample,g in q.obs.groupby('sample',observed=True):
+ if g.source.iloc[0]=='NCI':n=1631;basis='available author feature set; premerge feature masks unavailable'
+ else:n=int(presence[si.loc[sample],cols].sum());basis='source sample feature-presence mask'
+ rows.append(dict(sample=sample,source=g.source.iloc[0],cells=len(g),model_features_available=n,fraction=n/2000,basis=basis))
+full.file.close();pd.DataFrame(rows).to_csv(O/'tables/query_model_coverage_by_sample.tsv',sep='\t',index=False)
+record=dict(status='REVIEWED',reference_broad_macro_accuracy=float(vc.accuracy.mean()),old_raw_overlap_cells=len(common),old_raw_max_abs_difference=mx,coverage_min=min(r['fraction'] for r in rows),NCI_coverage=1631/2000,interpretation='KNN vote reflects reference support, not calibrated probability or proven CAF identity');(O/'MAPPING_REVIEW.json').write_text(json.dumps(record,indent=2),encoding='utf-8');print(json.dumps(record),flush=True)

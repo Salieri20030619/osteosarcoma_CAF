@@ -1,0 +1,12 @@
+args<-commandArgs(TRUE);stopifnot(length(args)==1)
+d<-args[1]
+suppressPackageStartupMessages({library(Matrix);library(data.table);library(scDblFinder);library(SingleCellExperiment);library(BiocParallel)})
+cells<-as.data.frame(fread(file.path(d,'cells.tsv')));genes<-as.data.frame(fread(file.path(d,'genes.tsv')))
+x<-as(readMM(gzfile(file.path(d,'counts.mtx.gz'))),'CsparseMatrix');dimnames(x)<-list(genes$ensembl,cells$tool_id)
+stopifnot(!anyDuplicated(colnames(x)),all(colSums(x)==cells$n_counts))
+set.seed(20261015)
+a<-scDblFinder(SingleCellExperiment(list(counts=x)),BPPARAM=SerialParam(RNGseed=20261015,progressbar=FALSE))
+o<-data.frame(cell_id=cells$cell_id,tool_id=cells$tool_id,scDblFinder_score=a$scDblFinder.score,scDblFinder_class=as.character(a$scDblFinder.class))
+fwrite(o,file.path(d,'full_scDblFinder_calls.tsv'),sep='\t')
+sink(file.path(d,'full_scDblFinder_sessionInfo.txt'));print(sessionInfo());sink()
+writeLines('FULL_DOUBLETS_COMPLETE',file.path(d,'DOUBLETS_COMPLETE'))

@@ -1,0 +1,24 @@
+from caf117_common import *
+assert (O/'STRUCTURE_COMPLETE.json').exists();event('03_correspondence','started')
+m=read('frozen_registry.tsv.gz');lab=read('joint_cell_labels.tsv.gz').set_index('cell_id');m['joint_cluster']=m.cell_id.map(lab.joint_cluster);dictionary=read('original33_dictionary.tsv');assert m.joint_cluster.notna().all()
+main=m[~m.doublet];old=main[main.cohort.eq('baseline')];rows=[];newrows=[]
+ct=pd.crosstab(old.original_state,old.joint_cluster).reindex(dictionary.subgroup_id,fill_value=0);save(ct.reset_index(),'old33_by_joint_counts.tsv');save(ct.div(ct.sum(1),axis=0).reset_index(),'old33_by_joint_row_fraction.tsv');save(ct.div(ct.sum(0),axis=1).reset_index(),'old33_by_joint_column_fraction.tsv')
+save(pd.crosstab(m[m.cohort.eq('baseline')].original_state,m[m.cohort.eq('baseline')].joint_cluster).reset_index(),'old33_by_joint_allcell_counts.tsv')
+patient=[]
+for (src,donor,state),g in old.groupby(['source','donor','original_state']):
+ vc=g.joint_cluster.value_counts()
+ for cl in ct.columns:patient.append(dict(source=src,donor=donor,old_state=state,joint_cluster=cl,cells=int(vc.get(cl,0)),state_cells=len(g),fraction=vc.get(cl,0)/len(g)))
+patient=pd.DataFrame(patient);save(patient,'old33_patient_transitions.tsv');balanced=patient.groupby(['old_state','joint_cluster']).fraction.mean().unstack().reindex(dictionary.subgroup_id).fillna(0);save(balanced.reset_index(),'old33_patient_balanced_fraction.tsv')
+sourcebalanced=patient.groupby(['source','old_state','joint_cluster']).fraction.mean().groupby(['old_state','joint_cluster']).mean().unstack().reindex(dictionary.subgroup_id).fillna(0);save(sourcebalanced.reset_index(),'old33_source_balanced_fraction.tsv')
+for state,row in ct.iterrows():
+ fr=(row/row.sum()).sort_values(ascending=False);pb=balanced.loc[state].sort_values(ascending=False);name=dictionary.set_index('subgroup_id').loc[state,'working_name'];route='mostly_retained' if fr.iloc[0]>=.7 else 'split' if (fr>=.2).sum()>=2 else 'dispersed'
+ rows.append(dict(old_state=state,working_name=name,original_all_cells=int(m.original_state.eq(state).sum()),original_fit_cells=int(row.sum()),leading_joint_cluster=fr.index[0],leading_fraction=float(fr.iloc[0]),second_joint_cluster=fr.index[1],second_fraction=float(fr.iloc[1]),route=route,patient_balanced_leading_cluster=pb.index[0],patient_balanced_leading_fraction=float(pb.iloc[0]),source_balanced_leading_cluster=sourcebalanced.loc[state].idxmax(),source_balanced_leading_fraction=float(sourcebalanced.loc[state].max()),count_patient_route_agree=fr.index[0]==pb.index[0],entropy=float(-sum(v*np.log(v) for v in fr if v>0))))
+routes=pd.DataFrame(rows);save(routes,'old33_joint_correspondence.tsv')
+for cl,g in main.groupby('joint_cluster'):
+ oc=g[g.cohort.eq('baseline')].original_state.value_counts();fr=oc/oc.sum() if len(oc) else oc;dc=g.groupby(['source','donor']).size();rec=dict(joint_cluster=cl,cells=len(g),original_cells=int(g.cohort.eq('baseline').sum()),new_cells=int(g.cohort.eq('added').sum()),NCC_cells=int(g.source.eq('NCC').sum()),NCI_cells=int(g.source.eq('NCI').sum()),source_patient_records=len(dc),sources=g.source.nunique(),dominant_patient_fraction=float(dc.max()/len(g)),leading_old_state=oc.index[0] if len(oc) else 'none',leading_old_fraction_among_old=float(fr.iloc[0]) if len(fr) else np.nan,old_states_at_least20pct=';'.join(fr[fr>=.2].index),old_route='convergence' if (fr>=.2).sum()>=2 else 'dominant_old_state' if len(fr) else 'no_old_cells',added_enriched=len(oc)==0 or g.cohort.eq('added').mean()>=.9)
+ newrows.append(rec)
+new=pd.DataFrame(newrows);stable=read('joint_cluster_stability.tsv');new=new.merge(stable.drop(columns=['fit_cells','source_patient_records','sources','dominant_patient_fraction','original_cells','new_cells']),on='joint_cluster',validate='one_to_one');save(new,'joint_cluster_origins_and_stability.tsv')
+save(main.groupby(['joint_cluster','source','donor','cohort']).size().rename('cells').reset_index(),'joint_patient_source_composition.tsv');save(main.groupby(['joint_cluster','old_lineage','old_lineage_confidence']).size().rename('cells').reset_index(),'joint_original_lineage_composition.tsv')
+base=read('baseline_control_labels.tsv');save(pd.crosstab(base.baseline_control_cluster,base.joint_cluster).reset_index(),'baseline_control_to_joint_counts.tsv')
+dump('CORRESPONDENCE_COMPLETE.json',dict(status='PASS',old_subgroups=len(routes),old_fit_cells=len(old),old_all_cells=int(m.cohort.eq('baseline').sum()),new_clusters=len(new),routes=routes.route.value_counts().to_dict(),count_vs_patient_disagreements=int((~routes.count_patient_route_agree).sum()),convergent_new_groups=int(new.old_route.eq('convergence').sum()),added_enriched_groups=new.loc[new.added_enriched,'joint_cluster'].tolist(),cell_ID_based=True,no_forced_one_to_one=True))
+event('03_correspondence','completed',old_states=len(routes),new_clusters=len(new))
